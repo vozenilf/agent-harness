@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from agent-harness!")
+"""agent-harness: a small, tested agent harness around a local LLM."""
