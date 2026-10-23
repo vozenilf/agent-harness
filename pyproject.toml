@@ -1,0 +1,38 @@
+[project]
+name = "agent-harness"
+version = "0.1.0"
+description = "A small, tested agent harness: a local LLM, a tool-calling loop, memory and MCP servers."
+readme = "README.md"
+authors = [
+    { name = "vozenilf", email = "vozenilf@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "mcp>=2.3.0",
+    "openai>=3.37.0",
+    "pydantic>=2.14.1",
+]
+
+[project.scripts]
+agent-harness = "agent_harness:main"
+
+[build-system]
+requires = ["uv_build>=0.12.24,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.17.2",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

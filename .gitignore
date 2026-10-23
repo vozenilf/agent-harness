@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Secrets and personal runtime data
+.env
+memory.md
+workspace/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
