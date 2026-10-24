@@ -35,7 +35,7 @@ def test_paths_outside_the_workspace_are_refused(workspace, filename):
         workspace.read_file(filename)
     with pytest.raises(PermissionError, match="outside the workspace"):
         workspace.write_file(filename, "gotcha")
-    assert not (workspace.root / filename).resolve().exists() 
+    assert not (workspace.root / filename).resolve().exists()
 
 
 def test_absolute_paths_are_refused(workspace, tmp_path):
