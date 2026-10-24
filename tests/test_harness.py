@@ -26,15 +26,15 @@ async def test_ask_sends_model_system_prompt_and_turns_thinking_off(fake_llm, co
 
 
 async def test_whole_conversation_is_sent_on_the_next_turn(harness, fake_llm):
-    fake_llm.say("Nice to meet you, Filip.")
-    fake_llm.say("Your name is Filip.")
+    fake_llm.say("Nice to meet you, Eddie.")
+    fake_llm.say("Your name is Eddie.")
 
-    await harness.ask("My name is Filip.")
+    await harness.ask("My name is Eddie.")
     await harness.ask("What is my name?")
 
     second = fake_llm.requests[1]["messages"]
     assert [m["role"] for m in second] == ["system", "user", "assistant", "user"]
-    assert second[2]["content"] == "Nice to meet you, Filip."
+    assert second[2]["content"] == "Nice to meet you, Eddie."
 
 
 async def test_reasoning_effort_is_left_out_when_not_set(fake_llm):

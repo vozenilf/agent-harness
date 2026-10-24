@@ -13,6 +13,7 @@ from openai import AsyncOpenAI
 
 from agent_harness.config import ModelConfig
 from agent_harness.harness import Harness
+from agent_harness.workspace import Workspace
 
 
 class FakeLLM:
@@ -24,20 +25,40 @@ class FakeLLM:
         self.down = False  # True = behave like a server that isn't running
 
     def say(self, content: str | None) -> None:
-        """Queue the next answer, as the JSON an OpenAI-compatible server returns."""
+        """Queue a plain text answer."""
+        self._queue({"role": "assistant", "content": content}, finish_reason="stop")
+
+    def call_tools(self, *calls: tuple[str, dict[str, Any] | str]) -> None:
+        """Queue an answer in which the model asks for one or more tools.
+
+        Each call is (tool name, arguments). Arguments given as a dict are encoded as
+        JSON, like a real model would; a str is sent as-is (to test broken JSON).
+        """
+        tool_calls = [
+            {
+                "id": f"call_{len(self.replies)}_{i}",
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": args if isinstance(args, str) else json.dumps(args),
+                },
+            }
+            for i, (name, args) in enumerate(calls)
+        ]
+        self._queue(
+            {"role": "assistant", "content": None, "tool_calls": tool_calls},
+            finish_reason="tool_calls",
+        )
+
+    def _queue(self, message: dict[str, Any], finish_reason: str) -> None:
+        """Wrap a message in the JSON an OpenAI-compatible server returns, and queue it."""
         self.replies.append(
             {
                 "id": "chatcmpl-test",
                 "object": "chat.completion",
                 "created": 0,
                 "model": "fake-model",
-                "choices": [
-                    {
-                        "index": 0,
-                        "finish_reason": "stop",
-                        "message": {"role": "assistant", "content": content},
-                    }
-                ],
+                "choices": [{"index": 0, "finish_reason": finish_reason, "message": message}],
             }
         )
 
@@ -70,3 +91,10 @@ def config() -> ModelConfig:
 def harness(fake_llm, config) -> Harness:
     """A harness wired to the fake server instead of Ollama."""
     return Harness(fake_llm.client(), config)
+
+
+@pytest.fixture
+def workspace(tmp_path) -> Workspace:
+    """A workspace in a fresh temporary folder, with one file in it."""
+    (tmp_path / "notes.txt").write_text("buy milk", encoding="utf-8")
+    return Workspace(tmp_path)
