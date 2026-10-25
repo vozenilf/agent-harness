@@ -1,19 +1,22 @@
 """Command-line chat: read a line, ask the harness, print the answer."""
 
 import asyncio
+from contextlib import AsyncExitStack
 from pathlib import Path
 
 from openai import APIError, AsyncOpenAI
 
 from agent_harness.config import load_model_config
 from agent_harness.harness import SYSTEM_PROMPT, Harness
+from agent_harness.mcp_client import connect_servers, load_server_configs
 from agent_harness.memory import Memory, system_prompt_with_memory
 from agent_harness.tools import ToolRegistry
 from agent_harness.workspace import Workspace
 
-# Both relative to the folder you start the harness from; both are gitignored.
-WORKSPACE_DIR = Path("workspace")
-MEMORY_FILE = Path("memory.md")
+# All relative to the folder you start the harness from.
+WORKSPACE_DIR = Path("workspace")  # gitignored
+MEMORY_FILE = Path("memory.md")  # gitignored
+MCP_CONFIG = Path("mcp_servers.json")  # committed; secrets come from ${VARS}
 
 
 def print_event(kind: str, text: str) -> None:
@@ -38,27 +41,35 @@ async def repl(harness: Harness) -> None:
         print(f"\nassistant: {answer}")
 
 
-def main() -> None:
-    """Entry point of the `agent-harness` command."""
+async def run() -> None:
+    """Set everything up, chat, and close the MCP servers at the end."""
     config = load_model_config()
     client = AsyncOpenAI(base_url=config.base_url, api_key=config.api_key)
-
     WORKSPACE_DIR.mkdir(exist_ok=True)
     memory = Memory(MEMORY_FILE)
-    tools = ToolRegistry(Workspace(WORKSPACE_DIR).tools() + memory.tools())
-    harness = Harness(
-        client,
-        config,
-        tools=tools,
-        system_prompt=system_prompt_with_memory(SYSTEM_PROMPT, memory),
-        on_event=print_event,
-    )
 
-    print(f"agent-harness ({config.model} at {config.base_url})")
-    print(f"tools: {', '.join(tools.names())}")
-    print(f"memory: {len(memory.facts())} saved fact(s) in {MEMORY_FILE}")
+    async with AsyncExitStack() as stack:  # MCP servers live exactly as long as this block
+        print("starting MCP servers...")
+        mcp_tools = await connect_servers(load_server_configs(MCP_CONFIG), stack)
+        tools = ToolRegistry(Workspace(WORKSPACE_DIR).tools() + memory.tools() + mcp_tools)
+        harness = Harness(
+            client,
+            config,
+            tools=tools,
+            system_prompt=system_prompt_with_memory(SYSTEM_PROMPT, memory),
+            on_event=print_event,
+        )
+        print(f"\nagent-harness ({config.model} at {config.base_url})")
+        print(f"tools: {', '.join(tools.names())}")
+        print(f"memory: {len(memory.facts())} saved fact(s) in {MEMORY_FILE}")
+        print("/quit or Ctrl+C to exit")
+        await repl(harness)
+
+
+def main() -> None:
+    """Entry point of the `agent-harness` command."""
     try:
-        asyncio.run(repl(harness))
+        asyncio.run(run())
     except (EOFError, KeyboardInterrupt):
         pass
     print("\nbye!")

@@ -52,8 +52,11 @@ class ToolRegistry:
     def names(self) -> list[str]:
         return list(self._tools)
 
+    def tools(self) -> list[Tool]:
+        return list(self._tools.values())
+
     def schemas(self) -> list[dict[str, Any]]:
-        return [tool.schema() for tool in self._tools.values()]
+        return [tool.schema() for tool in self.tools()]
 
     async def call(self, name: str, raw_arguments: str) -> str:
         """Run one tool call from the model. Always returns text; never raises."""

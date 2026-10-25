@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "time": {
+      "command": "uvx",
+      "args": ["mcp-server-time", "--local-timezone=Europe/Prague"]
+    },
+    "notion": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/vozenilf/notion-mcp", "notion-mcp"],
+      "env": {"NOTION_TOKEN": "${NOTION_TOKEN}"}
+    }
+  }
+}
