@@ -1,12 +1,12 @@
 """The harness: keeps the conversation, talks to the model and runs the agent loop."""
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from openai import AsyncOpenAI
 
 from agent_harness.config import ModelConfig
-from agent_harness.tools import ToolRegistry
+from agent_harness.tools import Tool, ToolRegistry
 
 SYSTEM_PROMPT = """You are a helpful personal assistant. Be concise.
 
@@ -20,6 +20,12 @@ MAX_STEPS = 10  # model calls per question; stops a model that keeps calling too
 # so a front end (the CLI now, a web page on Sunday) can show what the agent is doing.
 EventHandler = Callable[[str, str], None]
 
+# Asked before a tool that changes something (read_only=False) runs: (tool, raw arguments)
+# -> True to run it, False to refuse. The CLI asks you; the Košík app will apply its rules.
+Approver = Callable[[Tool, str], Awaitable[bool]]
+
+DECLINED = "error: the user declined this action. Ask them what they would like instead."
+
 
 class Harness:
     """Holds the conversation and runs the agent loop: model -> tools -> model -> ..."""
@@ -32,12 +38,14 @@ class Harness:
         system_prompt: str = SYSTEM_PROMPT,
         max_steps: int = MAX_STEPS,
         on_event: EventHandler | None = None,
+        approve: Approver | None = None,
     ) -> None:
         self.client = client
         self.config = config
         self.tools = tools or ToolRegistry()
         self.max_steps = max_steps
         self.on_event = on_event or (lambda kind, text: None)  # default: do nothing
+        self.approve = approve  # None = run every tool without asking
         self.messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
 
     async def ask(self, user_message: str) -> str:
@@ -81,12 +89,24 @@ class Harness:
         )
         return response.choices[0].message
 
+    def _needs_approval(self, tool: Tool) -> bool:
+        """Ask only for tools that change something, and only if someone is there to ask."""
+        return not tool.read_only and self.approve is not None
+
     async def _run_tool_call(self, call: Any) -> str:
-        """Run one tool call and report it through on_event."""
+        """Run one tool call - after approval if it changes something - and report it."""
         if call.type != "function":  # we only ever offer function tools
             return f"error: unsupported tool call type '{call.type}'"
         name, arguments = call.function.name, call.function.arguments
         self.on_event("tool_call", f"{name}({arguments})")
+
+        tool = self.tools.get(name)  # None for an unknown name: the registry reports that
+        if tool is not None and self._needs_approval(tool):
+            approved = await self.approve(tool, arguments)
+            if not approved:
+                self.on_event("declined", name)
+                return DECLINED
+
         result = await self.tools.call(name, arguments)
         self.on_event("tool_result", result)
         return result

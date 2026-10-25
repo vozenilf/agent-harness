@@ -2,7 +2,7 @@
 
 import json
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
@@ -60,7 +60,7 @@ def test_expand_env_refuses_unset_variables(monkeypatch):
 
 
 @asynccontextmanager
-async def connected_demo() -> AsyncIterator[ToolRegistry]:
+async def connected_demo() -> AsyncGenerator[ToolRegistry]:
     """Start the demo server, hand its tools over, stop it at the end of the block.
 
     A context manager rather than a fixture: the MCP connection must be opened and
