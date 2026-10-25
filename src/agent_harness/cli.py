@@ -6,11 +6,14 @@ from pathlib import Path
 from openai import APIError, AsyncOpenAI
 
 from agent_harness.config import load_model_config
-from agent_harness.harness import Harness
+from agent_harness.harness import SYSTEM_PROMPT, Harness
+from agent_harness.memory import Memory, system_prompt_with_memory
 from agent_harness.tools import ToolRegistry
 from agent_harness.workspace import Workspace
 
-WORKSPACE_DIR = Path("workspace")  # relative to the folder you start the harness from
+# Both relative to the folder you start the harness from; both are gitignored.
+WORKSPACE_DIR = Path("workspace")
+MEMORY_FILE = Path("memory.md")
 
 
 def print_event(kind: str, text: str) -> None:
@@ -41,11 +44,19 @@ def main() -> None:
     client = AsyncOpenAI(base_url=config.base_url, api_key=config.api_key)
 
     WORKSPACE_DIR.mkdir(exist_ok=True)
-    tools = ToolRegistry(Workspace(WORKSPACE_DIR).tools())
-    harness = Harness(client, config, tools=tools, on_event=print_event)
+    memory = Memory(MEMORY_FILE)
+    tools = ToolRegistry(Workspace(WORKSPACE_DIR).tools() + memory.tools())
+    harness = Harness(
+        client,
+        config,
+        tools=tools,
+        system_prompt=system_prompt_with_memory(SYSTEM_PROMPT, memory),
+        on_event=print_event,
+    )
 
     print(f"agent-harness ({config.model} at {config.base_url})")
-    print(f"tools: {', '.join(tools.names())} - /quit or Ctrl+C to exit")
+    print(f"tools: {', '.join(tools.names())}")
+    print(f"memory: {len(memory.facts())} saved fact(s) in {MEMORY_FILE}")
     try:
         asyncio.run(repl(harness))
     except (EOFError, KeyboardInterrupt):
